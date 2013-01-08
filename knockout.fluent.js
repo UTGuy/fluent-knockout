@@ -106,6 +106,11 @@
         get : function(className) {
             return my.get(className || my.root);
         },
+        // Returns the class object reference
+        // use this to "new MyClass()" (ie. app.getClass("MyClass")(data) will work)
+        getClass: function(className) {
+            return my.classes[className || my.root];
+        },
         // Add a new fluent class
         add: function (className) {
             if (className == undefined)
@@ -188,7 +193,7 @@
                 },
                 // You are done with fluent methods and need a pointer to the class.
                 done: function() {
-                    return my.classes[className];
+                    return app.getClass(className);
                 }
             };
             return obj;
