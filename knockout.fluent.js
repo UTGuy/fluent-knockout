@@ -76,7 +76,7 @@
                 var dataProps = $.extend(true, {}, data, props);
 
                 // map combined view model
-                var vm = ko.mapping.fromJS(data, maps, props);
+                var vm = ko.mapping.fromJS(dataProps, maps);
                 
                 loop(function (className) {
                 
@@ -84,10 +84,8 @@
                     var myClass = my.get(className);
                     
                     // set all dataAccess properties
-                    with (myClass.dataAccess) {
-                        viewModel = vm;
-                        model = dataProps;
-                    }
+                    myClass.dataAccess.viewModel = vm;
+                    myClass.dataAccess.model = dataProps;
                     
                     // call all ui methods
                     myClass.ui.call(vm, dataProps, myClass.dataAccess, myClass.i18n);
@@ -102,6 +100,23 @@
                 
                 // return the viewmodel
                 return vm;
+
+                //var baseVm = (function (vm, data, bases) {
+                //    for (var i = 0; i < bases.length; i++) {
+                //        vm = $.extend(true, my.classes[bases[i]](data), vm);
+                //    }
+                //    return vm;
+                //})({}, data, my.bases[name]);
+                //var myClass = my.get(name);
+                //var vm = ko.mapping.fromJS(
+                //    $.extend(true, {}, data, myClass.defaults),
+                //    myClass.map, baseVm);
+                //myClass.dataAccess.viewModel = vm;
+                //myClass.dataAccess.model = data;
+                //myClass.ui.call(vm, data, myClass.dataAccess, myClass.i18n);
+                //myClass.model.call(vm, data, myClass.dataAccess, myClass.i18n);
+                //if (name == my.root) ko.applyBindings(vm);
+                //return vm;
             };
             return my.get(name);
         },
