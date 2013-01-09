@@ -34,21 +34,73 @@
             my.i18n[name] = {};
             my.bases[name] = [];
             my.classes[name] = function (data) {
-                var baseVm = (function (vm, data, bases) {
+                
+                // init the view model
+                var vm = {};
+
+                // loop thru the bases
+                var loop = function (callback, className, value) {
+                    if (className == undefined) className = name;
+                    if (value == undefined) value = {};
+                    // execute bases first
+                    var bases = my.bases[className];
                     for (var i = 0; i < bases.length; i++) {
-                        vm = $.extend(true, my.classes[bases[i]](data), vm);
+                        var base = bases[i];
+                        loop(callback, base, value);
                     }
-                    return vm;
-                })({}, data, my.bases[name]);
-                var myClass = my.get(name);
-                var vm = ko.mapping.fromJS(
-                    $.extend(true, {}, data, myClass.defaults),
-                    myClass.map, baseVm);
-                myClass.dataAccess.viewModel = vm;
-                myClass.dataAccess.model = data;
-                myClass.ui.call(vm, data, myClass.dataAccess, myClass.i18n);
-                myClass.model.call(vm, data, myClass.dataAccess, myClass.i18n);
-                if (name == my.root) ko.applyBindings(vm);
+                    // now execute me
+                    return $.extend(true, value, callback(className, value) || {});
+                };
+
+                // combine all base props
+                var props = loop(function (base, props) {
+                    return $.extend(true, {}, my.defaults[base], props);
+                });
+                
+                // combine all base maps
+                var maps = loop(function (base, maps) {
+                    return $.extend(true, {}, my.mappings[base], maps);
+                });
+                
+                // combine all base dataAccess
+                var da = loop(function (base, da) {
+                    return $.extend(true, {}, my.dataAccess[base], da);
+                });
+                
+                // combine all base i18n
+                var i18n = loop(function (base, i18n) {
+                    return $.extend(true, {}, my.i18n[base], i18n);
+                });
+                
+                // combine data and props
+                var dataProps = $.extend(true, {}, data, props);
+
+                // map combined view model
+                var vm = ko.mapping.fromJS(data, maps, props);
+                
+                loop(function (className) {
+                
+                    // get a pointer to my class
+                    var myClass = my.get(className);
+                    
+                    // set all dataAccess properties
+                    with (myClass.dataAccess) {
+                        viewModel = vm;
+                        model = dataProps;
+                    }
+                    
+                    // call all ui methods
+                    myClass.ui.call(vm, dataProps, myClass.dataAccess, myClass.i18n);
+                    
+                    // call all model methods
+                    myClass.model.call(vm, dataProps, myClass.dataAccess, myClass.i18n);
+                });
+
+                // apply bindings (but only if we are the root view model)
+                if (name == my.root)
+                    ko.applyBindings(vm);
+                
+                // return the viewmodel
                 return vm;
             };
             return my.get(name);
