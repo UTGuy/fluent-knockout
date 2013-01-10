@@ -73,7 +73,7 @@
                 });
                 
                 // combine data and props
-                var dataProps = $.extend(true, {}, data, props);
+                var dataProps = $.extend(true, {}, props, data);
 
                 // map combined view model
                 var vm = ko.mapping.fromJS(dataProps, maps);
