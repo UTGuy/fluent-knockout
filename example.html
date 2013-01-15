@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/modernizr/2.6.2/modernizr.min.js"></script>
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+	<script src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.2.0/knockout-min.js"></script>
+	<script src="http://cdnjs.cloudflare.com/ajax/libs/knockout.mapping/2.3.4/knockout.mapping.js"></script>
+	<script src="https://raw.github.com/UTGuy/fluent-knockout/master/knockout.fluent.js"></script>
+	<link href="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/css/bootstrap-combined.min.css" rel="stylesheet">
+	<script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js"></script>
+	<script type="text/javascript">
+		(function($,ko,app){
+
+			var Owner = app.add("Owner")
+				.propString("FirstName")
+				.propString("LastName")
+				.done();
+			
+			app.add()
+				.propArray("Owners","Owner")
+				.ui(function(){
+					var self = this;
+					self.addOwner = function(){
+						self.Owners.push( new Owner() );
+					};
+				})
+				.model(function(){
+					var self = this;
+					self.FullName = ko.computed(function(){
+						return [self.Year(),self.Make(),self.Model()].join(" ");
+					});
+				});
+			
+			app.applyBindings({
+				Make: "Mazda",
+				Model: "3",
+				Color: "Silver",
+				Year: "2008",
+				Owners: [
+					{ FirstName: "Mike", LastName: "Walters" }
+				]
+			});
+
+		})(jQuery,ko,ko.fluent);
+	</script>
+  </head>
+  <body>
+	<div class="container">
+		<h3 data-bind="text: FullName"></h3>
+		<form class="form-horizonal">
+			<div class="control-group">
+				<label class="control-label">Make</label>
+				<div class="controls">
+					<input type="text" class="input-large" data-bind="value: Make" />
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">Model</label>
+				<div class="controls">
+					<input type="text" class="input-large" data-bind="value: Model" />
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">Year</label>
+				<div class="controls">
+					<input type="text" class="input-large" data-bind="value: Year" />
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">Color</label>
+				<div class="controls">
+					<input type="text" class="input-large" data-bind="value: Color" />
+				</div>
+			</div>
+			<div class="control-group">
+				<label class="control-label">Owners</label>
+				<!-- ko foreach: Owners -->
+				<div class="controls">
+					<input type="text" class="input-large" data-bind="value: FirstName" />
+					<input type="text" class="input-large" data-bind="value: LastName" />
+				</div>
+				<!-- /ko -->
+				<div class="controls">
+					<a href="#" data-bind="click: addOwner">+Add Owner</a>
+				</div>
+			</div>
+		</form>
+	</div>
+  </body>
+</html>
