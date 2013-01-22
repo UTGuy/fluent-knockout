@@ -34,9 +34,6 @@
             my.i18n[name] = {};
             my.bases[name] = [];
             my.classes[name] = function (data) {
-                
-                // init the view model
-                var vm = {};
 
                 // loop thru the bases
                 var loop = function (callback, className, value) {
@@ -84,14 +81,21 @@
                     var myClass = my.get(className);
                     
                     // set all dataAccess properties
-                    myClass.dataAccess.viewModel = vm;
-                    myClass.dataAccess.model = dataProps;
+                    for (var prop in da) {
+                        var fnProp = da[prop];
+                        da[prop] = function () {
+                            return fnProp.apply({
+                                viewModel: vm,
+                                model: dataProps
+                            }, arguments);
+                        };
+                    }
                     
                     // call all ui methods
-                    myClass.ui.call(vm, dataProps, myClass.dataAccess, myClass.i18n);
+                    myClass.ui.call(vm, dataProps, da, i18n);
                     
                     // call all model methods
-                    myClass.model.call(vm, dataProps, myClass.dataAccess, myClass.i18n);
+                    myClass.model.call(vm, dataProps, da, i18n);
                 });
 
                 // apply bindings (but only if we are the root view model)
@@ -100,23 +104,6 @@
                 
                 // return the viewmodel
                 return vm;
-
-                //var baseVm = (function (vm, data, bases) {
-                //    for (var i = 0; i < bases.length; i++) {
-                //        vm = $.extend(true, my.classes[bases[i]](data), vm);
-                //    }
-                //    return vm;
-                //})({}, data, my.bases[name]);
-                //var myClass = my.get(name);
-                //var vm = ko.mapping.fromJS(
-                //    $.extend(true, {}, data, myClass.defaults),
-                //    myClass.map, baseVm);
-                //myClass.dataAccess.viewModel = vm;
-                //myClass.dataAccess.model = data;
-                //myClass.ui.call(vm, data, myClass.dataAccess, myClass.i18n);
-                //myClass.model.call(vm, data, myClass.dataAccess, myClass.i18n);
-                //if (name == my.root) ko.applyBindings(vm);
-                //return vm;
             };
             return my.get(name);
         },
@@ -205,9 +192,10 @@
                     return obj;
                 },
                 // Maps a property to a user defined class
-                map: function(prop, name) {
+                map: function(prop, name, observe) {
                     my.mapProp(className, prop, 'create', function(options) {
-                        return my.classes[name || prop](options.data);
+                    	var instance = my.classes[name || prop]( options.data );
+	                    return observe ? ko.observable(instance) : instance;
                     });
                     return obj;
                 },
@@ -219,6 +207,9 @@
                 prop: function(key, value) {
                     my.get(className).defaults[key] = value;
                     return obj;
+                },
+                propObject: function (key) {
+                    return obj.prop(key, {});
                 },
                 propNull: function(key) {
                     return obj.prop(key, null);
