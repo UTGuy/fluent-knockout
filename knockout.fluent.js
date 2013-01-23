@@ -82,15 +82,18 @@
                     
                     // set all dataAccess properties
                     for (var prop in da) {
-                        var fnProp = da[prop];
-                        da[prop] = function () {
-                            return fnProp.apply({
-                                viewModel: vm,
-                                model: dataProps
-                            }, arguments);
-                        };
+                        (function(prop) { // they really need their own stack for scoping
+                            var fnProp = da[prop];
+                            da[prop] = function() {
+                                return fnProp.apply({
+                                    name: prop,
+                                    viewModel: vm,
+                                    model: dataProps
+                                }, arguments);
+                            };
+                        })(prop);
                     }
-                    
+
                     // call all ui methods
                     myClass.ui.call(vm, dataProps, da, i18n);
                     
