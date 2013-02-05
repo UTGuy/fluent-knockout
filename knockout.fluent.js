@@ -156,8 +156,10 @@
                 if (viewModel == undefined) {
                     viewModel = window.viewModel;
                 }
-                app.model = viewModel;
-                app.viewModel = my.classes[my.root](viewModel);
+                app.model = viewModel || {};
+                if (!my.classes[my.root])
+                    app.add(); // ensure theres a class
+                app.viewModel = my.classes[my.root](app.model);
             });
         },
         get : function(className) {
