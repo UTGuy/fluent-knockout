@@ -23,7 +23,7 @@
                 console.warn(msg);
             else alert(msg);
         },
-        add: function(name) {
+        add: function (name, class_container) {
             var fn = function() {
             };
             my.mappings[name] = {};
@@ -33,7 +33,9 @@
             my.models[name] = fn;
             my.i18n[name] = {};
             my.bases[name] = [];
-            my.classes[name] = function (data) {
+            my.classes[name] = function (data, instance_container) {
+
+                var container = instance_container || class_container;
 
                 // loop thru the bases
                 var loop = function (callback, className, value) {
@@ -102,9 +104,16 @@
                 });
 
                 // apply bindings (but only if we are the root view model)
-                if (name == my.root)
-                    ko.applyBindings(vm);
-                
+                if (name == my.root || container != undefined) {
+                    var $elem = $(container || app.settings.defaultContainer);
+                    //if ($elem.length == 0) $elem = $("body");
+                    if ($elem.length > 0 && !$elem.is(".ko-fluent-bound")) {
+                        $elem.data("ko-fluent", vm);
+                        ko.applyBindings(vm, $elem[0]);
+                        $elem.addClass("ko-fluent-bound");
+                    }
+                }
+
                 // return the viewmodel
                 return vm;
             };
@@ -134,7 +143,7 @@
             var map = my.get(name).map;
             if (map[propName] == undefined)
                 map[propName] = {};
-            map[propName].create = fn;
+            map[propName][propClass] = fn;
         }
     };
     var utils = {
@@ -148,19 +157,29 @@
     var app = {
         ns: {},
         utils: utils,
+        settings: {
+           defaultContainer: "body"
+        },
+        appSettings: function(settings) {
+            app.settings = $.extend(app.settings, settings);
+        },
         // Returns the root view model
         viewModel: null,
         model: null,
-        applyBindings: function (viewModel) {
-            $(function() {
+        applyBindings: function (viewModel, container, name) {
+            var defferedBinding = $.Deferred();
+            $(function () {
                 if (viewModel == undefined) {
                     viewModel = window.viewModel;
                 }
                 app.model = viewModel || {};
-                if (!my.classes[my.root])
-                    app.add(); // ensure theres a class
-                app.viewModel = my.classes[my.root](app.model);
+                name = name || my.root;
+                if (!my.classes[name]) app.add(); // ensure theres a class
+                var vm = my.classes[name](app.model, container);
+                app.viewModel = vm; // going to deprecate this
+                defferedBinding.resolve(vm);
             });
+            return defferedBinding;
         },
         get : function(className) {
             return my.get(className || my.root);
@@ -170,11 +189,15 @@
         getClass: function(className) {
             return my.classes[className || my.root];
         },
+        update: function(instance, data) {
+            return ko.mapping.fromJS(instance, data);
+        },
         // Add a new fluent class
-        add: function (className) {
-            if (className == undefined)
+        add: function (className,container) {
+            if (className == undefined) {
                 className = my.root;
-            my.add(className);
+            }
+            my.add(className, container);
             var obj = {
                 // Adds a base class
                 base: function(baseName) {
@@ -196,43 +219,72 @@
                     my.mapArray(className, 'copy', prop);
                     return obj;
                 },
+                mapUpdate: function(prop, fn) {
+                    my.mapProp(className, prop, 'update', fn);
+                    return obj;
+                },
+                mapDate: function(prop) {
+                    obj.mapUpdate(prop, function (options) {
+                        var data = options.data;
+                        if (data != undefined) {
+                            if (typeof (data) == "string") {
+                                var ticks = Date.parse(data);
+                                if (ticks != undefined)
+                                    return new Date(ticks);
+                            }
+                        }
+                        return data;
+                    });
+                    return obj;
+                },
                 // Maps a property to a user defined class
-                map: function(prop, name, observe) {
-                    my.mapProp(className, prop, 'create', function(options) {
-                    	var instance = my.classes[name || prop]( options.data );
+                map: function(prop, name, observe, fn) {
+                    my.mapProp(className, prop, 'create', function (options) {
+                        var className = name || prop;
+                        if (my.classes[className] == undefined)
+                            throw "Attempting to use unregistered class '" + className + "'. Make sure the class or file has been added to the page.";
+                        var instance = my.classes[name || prop](options.data);
 	                    return observe ? ko.observable(instance) : instance;
                     });
                     return obj;
                 },
-                key: function(prop, name, fn) {
+                mapKey: function (prop, keyName, fn) {
+                    if (fn == undefined) {
+                        fn = function(data) {
+                            return ko.utils.unwrapObservable(data[keyName]);
+                        };
+                    }
                     my.mapProp(className, prop, 'key', fn);
                     return obj;
                 },
                 // Ensure your data has default properties
-                prop: function(key, value) {
-                    my.get(className).defaults[key] = value;
+                prop: function (name, value, observe) {
+                    my.get(className).defaults[name] = value;
                     return obj;
                 },
-                propObject: function (key) {
-                    return obj.prop(key, {});
+                propObject: function (name) {
+                    return obj.prop(name, {});
                 },
-                propNull: function(key) {
-                    return obj.prop(key, null);
+                propNull: function (name) {
+                    return obj.prop(name, null);
                 },
-                propString: function(key) {
-                    return obj.prop(key, "");
+                propString: function (name) {
+                    return obj.prop(name, "");
                 },
-                propDate: function(key) {
-                    return obj.prop(key, new Date());
+                propDate: function (name) {
+                    return obj.prop(name, new Date()).mapDate(name);
                 },
-                propArray: function(key) {
-                    return obj.prop(key, []);
+                propArray: function (name) {
+                    return obj.prop(name, []);
                 },
-                propFalse: function(key) {
-                    return obj.prop(key, false);
+                propFalse: function (name) {
+                    return obj.prop(name, false);
                 },
-                propTrue: function(key) {
-                    return obj.prop(key, true);
+                propTrue: function (name) {
+                    return obj.prop(name, true);
+                },
+                propInt: function (name) {
+                    return obj.prop(name, 0);
                 },
                 // Add ui specific functionality
                 ui: function(fn) {
