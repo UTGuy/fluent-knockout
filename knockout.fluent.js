@@ -223,7 +223,7 @@
                     my.mapProp(className, prop, 'update', fn);
                     return obj;
                 },
-                mapDate: function(prop) {
+                mapUpdateDate: function(prop) {
                     obj.mapUpdate(prop, function (options) {
                         var data = options.data;
                         if (data != undefined) {
@@ -257,6 +257,17 @@
                     my.mapProp(className, prop, 'key', fn);
                     return obj;
                 },
+                mapObject: function (prop, name, observe) {
+                    if (observe == undefined) observe = true;
+                    return this.propObject(prop).map(prop, name, observe);
+                },
+                mapNull: function (prop, name, observe) {
+                    if (observe == undefined) observe = true;
+                    return this.propNull(prop).map(prop, name, observe);
+                },
+                mapArray: function (prop, name) {
+                    return this.propArray(prop).map(prop, name);
+                },
                 // Ensure your data has default properties
                 prop: function (name, value, observe) {
                     my.get(className).defaults[name] = value;
@@ -272,7 +283,7 @@
                     return obj.prop(name, "");
                 },
                 propDate: function (name) {
-                    return obj.prop(name, new Date()).mapDate(name);
+                    return obj.prop(name, new Date()).mapUpdateDate(name);
                 },
                 propArray: function (name) {
                     return obj.prop(name, []);
