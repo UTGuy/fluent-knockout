@@ -36,9 +36,9 @@
             my.classes[name] = function (data, instance_container) {
 
                 var container = instance_container || class_container;
-
+                
                 // loop thru the bases
-                var loop = function (callback, className, value) {
+                function loop(callback, className, value) {
                     if (className == undefined) className = name;
                     if (value == undefined) value = {};
                     // execute bases first
@@ -49,53 +49,55 @@
                     }
                     // now execute me
                     return $.extend(true, value, callback(className, value) || {});
-                };
+                }
+
+                function combine(myProp) {
+                    return loop(function (base, obj) {
+                        return mesh(myProp[base], obj);
+                    });
+                }
+                
+                function mesh(obj1, obj2) {
+                    return $.extend(true, {}, obj1, obj2);
+                }
 
                 // combine all base props
-                var props = loop(function (base, props) {
-                    return $.extend(true, {}, my.defaults[base], props);
-                });
+                var props = combine(my.defaults);
                 
                 // combine all base maps
-                var maps = loop(function (base, maps) {
-                    return $.extend(true, {}, my.mappings[base], maps);
-                });
+                var maps = combine(my.mappings);
                 
                 // combine all base dataAccess
-                var da = loop(function (base, da) {
-                    return $.extend(true, {}, my.dataAccess[base], da);
-                });
+                var da = combine(my.dataAccess);
                 
                 // combine all base i18n
-                var i18n = loop(function (base, i18n) {
-                    return $.extend(true, {}, my.i18n[base], i18n);
-                });
+                var i18n = combine(my.i18n);
                 
-                // combine data and props
-                var dataProps = $.extend(true, {}, props, data);
+                // mesh props and data
+                var dataProps = mesh(props, data);
 
                 // map combined view model
                 var vm = ko.mapping.fromJS(dataProps, maps);
+
+                function createDataAccess(propName, fnProp) {
+                    return function () {
+                        return fnProp.apply({
+                            name: propName,
+                            viewModel: vm,
+                            model: dataProps
+                        }, arguments);
+                    };
+                }
+                
+                // set all dataAccess properties
+                for (var prop in da) {
+                    da[prop] = createDataAccess(prop, da[prop]);
+                }
                 
                 loop(function (className) {
-                
                     // get a pointer to my class
                     var myClass = my.get(className);
                     
-                    // set all dataAccess properties
-                    for (var prop in da) {
-                        (function(prop) { // they really need their own stack for scoping
-                            var fnProp = da[prop];
-                            da[prop] = function() {
-                                return fnProp.apply({
-                                    name: prop,
-                                    viewModel: vm,
-                                    model: dataProps
-                                }, arguments);
-                            };
-                        })(prop);
-                    }
-
                     // call all ui methods
                     myClass.ui.call(vm, dataProps, da, i18n);
                     
@@ -108,9 +110,8 @@
                     var $elem = $(container || app.settings.defaultContainer);
                     //if ($elem.length == 0) $elem = $("body");
                     if ($elem.length > 0 && !$elem.is(".ko-fluent-bound")) {
-                        $elem.data("ko-fluent", vm);
                         ko.applyBindings(vm, $elem[0]);
-                        $elem.addClass("ko-fluent-bound");
+                        $elem.addClass("ko-fluent-bound").data("ko-fluent", vm);
                     }
                 }
 
@@ -119,15 +120,15 @@
             };
             return my.get(name);
         },
-        get: function(name) {
-            return {
-                map: my.mappings[name],
-                defaults: my.defaults[name],
-                ui: my.ui[name],
-                model: my.models[name],
-                dataAccess: my.dataAccess[name],
-                i18n: my.i18n[name],
-                bases: my.bases[name]
+        get: function (name) {
+            with (my) return {
+                map: mappings[name],
+                defaults: defaults[name],
+                ui: ui[name],
+                model: models[name],
+                dataAccess: dataAccess[name],
+                i18n: i18n[name],
+                bases: bases[name]
             };
         },
         set : function(name, prop, value) {
@@ -158,7 +159,15 @@
         ns: {},
         utils: utils,
         settings: {
-           defaultContainer: "body"
+            defaultContainer: "body",
+            // override this to parse your own dates a certain way
+            parseDate: function(date) {
+                if (typeof (data) == "string") {
+                    var ticks = Date.parse(data);
+                    if (ticks != undefined)
+                        return new Date(ticks);
+                }
+            }
         },
         appSettings: function(settings) {
             app.settings = $.extend(app.settings, settings);
@@ -169,14 +178,22 @@
         applyBindings: function (viewModel, container, name) {
             var defferedBinding = $.Deferred();
             $(function () {
-                if (viewModel == undefined) {
-                    viewModel = window.viewModel;
-                }
-                app.model = viewModel || {};
-                name = name || my.root;
-                if (!my.classes[name]) app.add(); // ensure theres a class
-                var vm = my.classes[name](app.model, container);
-                app.viewModel = vm; // going to deprecate this
+                var RootClass = app.getClass(name || my.root);
+
+                // ensure theres a class
+                if (RootClass == undefined) 
+                    RootClass = app.add().done();
+
+                // get the model
+                app.model = viewModel || window.viewModel || {};
+                
+                // create the viewModel
+                var vm = new RootClass(app.model, container);
+                
+                // going to deprecate this
+                app.viewModel = vm; 
+                
+                // notify any subscribers
                 defferedBinding.resolve(vm);
             });
             return defferedBinding;
@@ -190,7 +207,7 @@
             return my.classes[className || my.root];
         },
         update: function(instance, data) {
-            return ko.mapping.fromJS(instance, data);
+            return ko.mapping.fromJS(data, {}, instance);
         },
         // Add a new fluent class
         add: function (className,container) {
@@ -225,26 +242,25 @@
                 },
                 mapUpdateDate: function(prop) {
                     obj.mapUpdate(prop, function (options) {
-                        var data = options.data;
-                        if (data != undefined) {
-                            if (typeof (data) == "string") {
-                                var ticks = Date.parse(data);
-                                if (ticks != undefined)
-                                    return new Date(ticks);
-                            }
+                        var date = options.data;
+                        if (date != undefined) {
+                            var dt = app.settings.parseDate(date);
+                            if (dt != undefined)
+                                return dt;
                         }
-                        return data;
+                        return date;
                     });
                     return obj;
                 },
                 // Maps a property to a user defined class
-                map: function(prop, name, observe, fn) {
+                map: function (prop, name, observe) {
                     my.mapProp(className, prop, 'create', function (options) {
-                        var className = name || prop;
-                        if (my.classes[className] == undefined)
-                            throw "Attempting to use unregistered class '" + className + "'. Make sure the class or file has been added to the page.";
-                        var instance = my.classes[name || prop](options.data);
-	                    return observe ? ko.observable(instance) : instance;
+                        var propClassName = name || prop;
+                        var PropClass = app.getClass(propClassName);
+                        if (PropClass == undefined)
+                            throw "Attempting to use unregistered class '" + propClassName + "'. Make sure the class or file has been added to the page.";
+                        var instance = new PropClass(options.data);
+                        return observe ? ko.observable(instance) : instance;
                     });
                     return obj;
                 },
@@ -267,6 +283,9 @@
                 },
                 mapArray: function (prop, name) {
                     return this.propArray(prop).map(prop, name);
+                },
+                mapDates: function (prop) {
+                    return this.propArray(prop).mapUpdateDate(prop);
                 },
                 // Ensure your data has default properties
                 prop: function (name, value, observe) {
@@ -296,6 +315,9 @@
                 },
                 propInt: function (name) {
                     return obj.prop(name, 0);
+                },
+                propDouble: function (name) {
+                    return obj.prop(name, 0.0);
                 },
                 // Add ui specific functionality
                 ui: function(fn) {
