@@ -78,6 +78,19 @@
 
                 // map combined view model
                 var vm = ko.mapping.fromJS(dataProps, maps);
+                
+                // fix: make sure all observable arrays have __ko_mapping__ property (if applicable)
+                for (var vmPropName in vm) {
+                    var vmProp = vm[vmPropName];
+                    var propMap = vm.__ko_mapping__[vmPropName];
+                    // test for observable array
+                    if (vmProp != undefined && 
+                        propMap != undefined &&
+                        ko.isObservable(vmProp) &&
+                        !(vmProp.destroyAll === undefined)) {
+                        vmProp.__ko_mapping__ = propMap;
+                    }
+                }
 
                 function createDataAccess(propName, fnProp) {
                     return function () {
@@ -209,6 +222,17 @@
         update: function(instance, data) {
             return ko.mapping.fromJS(data, {}, instance);
         },
+        // Clears all the fluent mappings
+        clear: function() {
+            my.classes = {};
+            my.mappings = {};
+            my.defaults = {};
+            my.ui = {};
+            my.models = {};
+            my.dataAccess = {};
+            my.i18n = {};
+            my.bases = {};
+        },
         // Add a new fluent class
         add: function (className,container) {
             if (className == undefined) {
@@ -253,8 +277,8 @@
                     return obj;
                 },
                 // Maps a property to a user defined class
-                map: function (prop, name, observe) {
-                    my.mapProp(className, prop, 'create', function (options) {
+                map: function(prop, name, observe) {
+                    my.mapProp(className, prop, 'create', function(options) {
                         var propClassName = name || prop;
                         var PropClass = app.getClass(propClassName);
                         if (PropClass == undefined)
